@@ -617,7 +617,7 @@ class AIWebsiteTester:
             
             # Capture initial screenshot
             initial_screenshot = self._capture_screenshot("initial")
-            if initial_screenshot:
+            if initial_screenshot and initial_screenshot.get("base64"):
                 screenshots.append(initial_screenshot)
             
             # Create a safe execution environment
