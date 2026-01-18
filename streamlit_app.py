@@ -11,19 +11,26 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Check Playwright availability directly
-try:
-    from playwright.sync_api import sync_playwright
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
+# Check Playwright availability directly - try multiple times
+PLAYWRIGHT_AVAILABLE = False
+for attempt in range(3):
+    try:
+        from playwright.sync_api import sync_playwright
+        PLAYWRIGHT_AVAILABLE = True
+        break
+    except ImportError:
+        if attempt < 2:
+            import time
+            time.sleep(0.5)  # Wait a bit and retry
+        continue
 
 # Import AI agent
 try:
     from ai_agent import AIWebsiteTester
 except ImportError as e:
     AIWebsiteTester = None
-    st.error(f"Failed to import AI agent: {e}")
+    # Don't show error here - will be handled later
+    pass
 
 # Load environment variables - check for .env file in current directory
 # Try multiple locations for .env file
@@ -56,56 +63,48 @@ st.set_page_config(
 @st.cache_resource
 def ensure_playwright_browsers():
     """Ensure Playwright browsers are installed"""
-    if not PLAYWRIGHT_AVAILABLE:
-        # Try to install playwright package
+    # First, check if Playwright package is available
+    playwright_available = False
+    try:
+        from playwright.sync_api import sync_playwright
+        playwright_available = True
+    except ImportError:
+        # Playwright not installed - this should be handled by requirements.txt
+        # On Streamlit Cloud, packages are installed during deployment
+        return False, "Playwright package not found. Please check that playwright==1.41.0 is in requirements.txt and deployment completed successfully."
+    
+    if not playwright_available:
+        return False, "Playwright package not available"
+    
+    # Try to verify browsers are installed by attempting to launch
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            # Try to launch chromium - if it works, browsers are installed
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
+            browser.close()
+        return True, None
+    except Exception as e:
+        # Browsers might not be installed, try to install them
         try:
-            import subprocess
             result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', 'playwright'],
+                [sys.executable, '-m', 'playwright', 'install', 'chromium'],
                 capture_output=True,
                 text=True,
-                timeout=120
+                timeout=300,  # 5 minutes timeout
+                stderr=subprocess.STDOUT
             )
+            
             if result.returncode == 0:
-                # Reload playwright
-                from playwright.sync_api import sync_playwright
-                PLAYWRIGHT_AVAILABLE = True
-            else:
-                return False, "Playwright package installation failed. Please check requirements.txt"
-        except Exception as e:
-            return False, f"Playwright package not installed: {str(e)}"
-    
-    try:
-        # Try to install chromium browser (idempotent - won't reinstall if already installed)
-        result = subprocess.run(
-            [sys.executable, '-m', 'playwright', 'install', 'chromium'],
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minutes timeout for installation
-            stderr=subprocess.STDOUT
-        )
-        
-        if result.returncode == 0:
-            return True, None
-        else:
-            # Installation might have failed, but browsers might already be installed
-            # Try to verify by checking if playwright can find chromium
-            try:
-                from playwright.sync_api import sync_playwright
-                with sync_playwright() as p:
-                    # Try to launch chromium - if it works, browsers are installed
-                    browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-                    browser.close()
                 return True, None
-            except Exception as e:
-                # Browsers might not be installed, but let's try anyway
-                return True, None  # Return True to allow the app to try
-    except subprocess.TimeoutExpired:
-        return False, "Playwright browser installation timed out. Please try again."
-    except Exception as e:
-        # If installation fails, browsers might still be available
-        # Let the runtime handle it
-        return True, None
+            else:
+                # Installation output for debugging
+                error_msg = result.stdout + result.stderr if result.stdout or result.stderr else str(e)
+                return False, f"Browser installation may have failed. Error: {error_msg[:200]}"
+        except subprocess.TimeoutExpired:
+            return False, "Browser installation timed out. This may take 3-5 minutes on first run."
+        except Exception as install_error:
+            return False, f"Could not install browsers: {str(install_error)}"
 
 # Inject custom CSS
 def inject_custom_css():
@@ -932,25 +931,33 @@ st.markdown('<div id="demo" class="section demo"><div class="section-container">
 ai_agent, error = get_ai_agent()
 
 # Ensure Playwright browsers are installed (this will install if needed)
-# Only check if we haven't already determined Playwright is not available
+playwright_ok = False
+playwright_error = None
+
+# Check Playwright availability (may have changed after imports)
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
 if PLAYWRIGHT_AVAILABLE:
     playwright_ok, playwright_error = ensure_playwright_browsers()
     
     # Show Playwright status if there's an issue
     if not playwright_ok:
-        with st.spinner(f"Installing Playwright browsers... {playwright_error}"):
-            # Try one more time
-            playwright_ok, playwright_error = ensure_playwright_browsers()
-        
-        if not playwright_ok:
-            st.warning(f"⚠️ Playwright browsers: {playwright_error}")
+        if "not found" in playwright_error.lower() or "not available" in playwright_error.lower():
+            st.warning(f"⚠️ {playwright_error}")
+        else:
+            # Browsers are installing
+            st.info(f"ℹ️ {playwright_error}")
             st.info("""
-            **Note:** Playwright browsers are installing in the background. 
-            This may take 3-5 minutes on first deployment. Please wait and refresh the page.
+            **Installing Playwright browsers...** This may take 3-5 minutes on first deployment.
+            Please wait and refresh the page once installation completes.
             """)
 else:
     playwright_ok = False
-    playwright_error = "Playwright package not available"
+    playwright_error = "Playwright package not installed"
 
 # Only show error message if API key is truly missing
 if error == "OPENAI_API_KEY_NOT_FOUND":
@@ -1059,13 +1066,16 @@ with col_results:
         elif not PLAYWRIGHT_AVAILABLE:
             st.error("❌ **Playwright package not installed.**")
             st.info("""
-            **Solution:** Playwright should be installed automatically from requirements.txt.
+            **Troubleshooting Steps:**
             
-            If you see this error:
-            1. Check that `playwright==1.41.0` is in requirements.txt
-            2. Wait for deployment to complete (may take a few minutes)
-            3. Check Streamlit Cloud logs for installation errors
-            4. Try redeploying the app
+            1. ✅ **Verify requirements.txt** - `playwright==1.41.0` should be listed
+            2. ⏳ **Wait for deployment** - Package installation happens during deployment (may take 2-5 minutes)
+            3. 📋 **Check deployment logs** - Go to "Manage app" → "Logs" to see if Playwright installed successfully
+            4. 🔄 **Try redeploying** - Click "Reboot app" or redeploy if installation failed
+            5. 📦 **Check packages.txt** - Ensure system dependencies are installed
+            
+            **Note:** On Streamlit Cloud, packages are installed automatically from requirements.txt during deployment.
+            If Playwright isn't installing, check the logs for specific errors.
             """)
         elif not playwright_ok:
             st.warning(f"⚠️ **Playwright browsers installing...** {playwright_error}")
