@@ -9,8 +9,19 @@ import base64
 from dotenv import load_dotenv
 from ai_agent import AIWebsiteTester
 
-# Load environment variables
-load_dotenv()
+# Load environment variables - check for .env file in current directory
+from pathlib import Path
+env_path = Path('.') / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+else:
+    # Try parent directory
+    env_path = Path('..') / '.env'
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+    else:
+        # Load from default locations
+        load_dotenv()
 
 # Page configuration
 st.set_page_config(
@@ -69,20 +80,23 @@ def inject_custom_css():
         padding: 0 !important;
     }
     
-    /* Hide Streamlit default elements */
+    /* Hide Streamlit default elements but keep our navbar */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Navigation */
+    /* Ensure navbar is visible and on top */
     .navbar {
         background: var(--white);
         box-shadow: var(--shadow);
         position: sticky;
         top: 0;
-        z-index: 1000;
+        z-index: 9999;
         padding: 1rem 0;
         margin-bottom: 0;
+        width: 100%;
+        display: block !important;
+        visibility: visible !important;
     }
     
     .nav-container {
@@ -92,6 +106,25 @@ def inject_custom_css():
         display: flex;
         justify-content: space-between;
         align-items: center;
+    }
+    
+    .nav-menu {
+        display: flex;
+        list-style: none;
+        gap: 2rem;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .nav-menu a {
+        text-decoration: none;
+        color: var(--text-dark);
+        font-weight: 500;
+        transition: color 0.3s;
+    }
+    
+    .nav-menu a:hover {
+        color: var(--primary-color);
     }
     
     .nav-brand {
@@ -553,18 +586,23 @@ def inject_custom_css():
 def get_ai_agent():
     """Initialize and cache the AI agent"""
     try:
-        # Try to get API key from Streamlit secrets first, then environment
+        # Try to get API key from Streamlit secrets first (for Cloud deployment)
         api_key = None
         try:
-            if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
-                api_key = st.secrets['OPENAI_API_KEY']
-                os.environ['OPENAI_API_KEY'] = api_key
+            if hasattr(st, 'secrets') and hasattr(st.secrets, 'get'):
+                api_key = st.secrets.get('OPENAI_API_KEY')
+                if api_key:
+                    os.environ['OPENAI_API_KEY'] = api_key
         except:
             pass
         
-        # If still not found, try environment variable
+        # If still not found, try environment variable (for local development with .env)
         if not api_key:
             api_key = os.getenv('OPENAI_API_KEY')
+        
+        # Set it in environment if found
+        if api_key:
+            os.environ['OPENAI_API_KEY'] = api_key
         
         # If no API key, return None but don't fail - agent can work in fallback mode
         if not api_key:
@@ -598,7 +636,7 @@ st.markdown(nav_html, unsafe_allow_html=True)
 
 # Hero Section
 hero_html = """
-<div class="hero">
+<div id="home" class="hero">
     <div class="hero-container">
         <div class="hero-grid">
             <div class="hero-left">
@@ -643,7 +681,7 @@ st.markdown(hero_html, unsafe_allow_html=True)
 
 # About Section
 about_html = """
-<div class="section about">
+<div id="about" class="section about">
     <div class="section-container">
         <h2 class="section-title">About the Project</h2>
         <div class="about-content">
@@ -695,7 +733,7 @@ st.markdown(about_html, unsafe_allow_html=True)
 
 # Features Section
 features_html = """
-<div class="section">
+<div id="features" class="section">
     <div class="section-container">
         <h2 class="section-title">Project Features</h2>
         <div class="features-grid">
@@ -747,7 +785,7 @@ st.markdown(features_html, unsafe_allow_html=True)
 
 # How It Works Section
 how_it_works_html = """
-<div class="section how-it-works">
+<div id="how-it-works" class="section how-it-works">
     <div class="section-container">
         <h2 class="section-title">How It Works</h2>
         <div class="workflow">
@@ -793,7 +831,7 @@ how_it_works_html = """
 st.markdown(how_it_works_html, unsafe_allow_html=True)
 
 # Demo Section
-st.markdown('<div class="section demo"><div class="section-container"><h2 class="section-title">Try It Now</h2><div class="demo-container">', unsafe_allow_html=True)
+st.markdown('<div id="demo" class="section demo"><div class="section-container"><h2 class="section-title">Try It Now</h2><div class="demo-container">', unsafe_allow_html=True)
 
 # Initialize agent
 ai_agent, error = get_ai_agent()
