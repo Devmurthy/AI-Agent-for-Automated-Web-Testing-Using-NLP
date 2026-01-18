@@ -71,7 +71,7 @@ def ensure_playwright_browsers():
     except ImportError:
         # Playwright not installed - this should be handled by requirements.txt
         # On Streamlit Cloud, packages are installed during deployment
-        return False, "Playwright package not found. Please check that playwright==1.41.0 is in requirements.txt and deployment completed successfully."
+        return False, "Playwright package not found. Please check that playwright==1.49.0 is in requirements.txt and deployment completed successfully."
     
     if not playwright_available:
         return False, "Playwright package not available"
@@ -89,17 +89,17 @@ def ensure_playwright_browsers():
         try:
             result = subprocess.run(
                 [sys.executable, '-m', 'playwright', 'install', 'chromium'],
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
-                timeout=300,  # 5 minutes timeout
-                stderr=subprocess.STDOUT
+                timeout=300  # 5 minutes timeout
             )
             
             if result.returncode == 0:
                 return True, None
             else:
                 # Installation output for debugging
-                error_msg = result.stdout + result.stderr if result.stdout or result.stderr else str(e)
+                error_msg = result.stdout if result.stdout else str(e)
                 return False, f"Browser installation may have failed. Error: {error_msg[:200]}"
         except subprocess.TimeoutExpired:
             return False, "Browser installation timed out. This may take 3-5 minutes on first run."
