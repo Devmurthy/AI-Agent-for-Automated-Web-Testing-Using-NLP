@@ -5,7 +5,22 @@ This provides an alternative deployment option using Streamlit
 
 import streamlit as st
 import os
+import subprocess
 from dotenv import load_dotenv
+
+# Install Playwright browsers if needed (for Streamlit Cloud)
+try:
+    from playwright.sync_api import sync_playwright
+    # Check if browsers are installed
+    result = subprocess.run(['playwright', 'install', '--dry-run', 'chromium'], 
+                          capture_output=True, text=True, timeout=10)
+    if 'chromium' in result.stdout.lower() or result.returncode != 0:
+        # Browsers not installed, install them
+        subprocess.run(['playwright', 'install', 'chromium'], 
+                      capture_output=True, timeout=300)
+except Exception as e:
+    st.warning(f"Playwright browser installation check failed: {e}")
+
 from ai_agent import AIWebsiteTester
 
 # Load environment variables
