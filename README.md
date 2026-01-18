@@ -230,9 +230,21 @@ For issues or questions, check the error messages in the application or review t
 ## 🌐 Deployment
 
 ### Streamlit Cloud
-This application is ready for deployment on Streamlit Cloud:
+This application is deployed and live on Streamlit Cloud:
+
+**🔗 Live Application:** [https://ai-agent-for-automated-web-testing-using-nlp-pexnzdwkf3wrggyxb.streamlit.app/](https://ai-agent-for-automated-web-testing-using-nlp-pexnzdwkf3wrggyxb.streamlit.app/)
+
+**Deployment Configuration:**
 - Configuration file: `.streamlit/config.toml`
 - System packages: `packages.txt`
 - Main file: `streamlit_app.py`
+- Python version: 3.11.9
+- Repository: [GitHub Repository](https://github.com/Devmurthy/AI-Agent-for-Automated-Web-Testing-Using-NLP)
 
-Simply connect your GitHub repository to Streamlit Cloud and deploy!
+**To deploy your own instance:**
+1. Fork or clone the repository
+2. Go to [Streamlit Cloud](https://share.streamlit.io/)
+3. Connect your GitHub repository
+4. Set main file to: `streamlit_app.py`
+5. Add `OPENAI_API_KEY` in Secrets
+6. Deploy!
