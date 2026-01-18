@@ -410,27 +410,67 @@ class AIWebsiteTester:
     def _capture_screenshot(self, name: str = "screenshot") -> dict:
         """Capture screenshot and return base64 encoded data"""
         try:
+            # Check if page exists and is not closed
             if not self.page:
                 return None
             
+            # Check if page is closed
+            try:
+                if self.page.is_closed():
+                    # Try to get a new page from context
+                    if self.context and self.context.pages:
+                        self.page = self.context.pages[-1]
+                    else:
+                        return None
+            except:
+                # If is_closed() check fails, try to get page from context
+                try:
+                    if self.context and self.context.pages:
+                        self.page = self.context.pages[-1]
+                    else:
+                        return None
+                except:
+                    return None
+            
             # Wait a moment for page to settle
-            time.sleep(0.5)
+            time.sleep(0.3)
             
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             screenshot_path = self.screenshots_dir / f"{name}_{timestamp}.png"
             
             # Capture screenshot with viewport size (not full page to avoid huge images)
-            # Use a reasonable max height to keep images manageable
-            screenshot_bytes = self.page.screenshot(
-                path=str(screenshot_path),
-                full_page=False,  # Use viewport instead of full page for better performance
-                type='png'
-            )
+            try:
+                screenshot_bytes = self.page.screenshot(
+                    path=str(screenshot_path),
+                    full_page=False,  # Use viewport instead of full page for better performance
+                    type='png',
+                    timeout=5000  # 5 second timeout
+                )
+            except Exception as screenshot_error:
+                # If screenshot fails, try without path (in-memory)
+                try:
+                    screenshot_bytes = self.page.screenshot(
+                        full_page=False,
+                        type='png',
+                        timeout=5000
+                    )
+                except:
+                    return None
             
-            # If screenshot_bytes is None, read from file
+            # If screenshot_bytes is None, try reading from file
             if screenshot_bytes is None:
-                with open(screenshot_path, "rb") as f:
-                    screenshot_bytes = f.read()
+                try:
+                    if screenshot_path.exists():
+                        with open(screenshot_path, "rb") as f:
+                            screenshot_bytes = f.read()
+                    else:
+                        return None
+                except:
+                    return None
+            
+            # Verify we have screenshot data
+            if not screenshot_bytes or len(screenshot_bytes) < 100:
+                return None
             
             # Encode as base64
             screenshot_data = base64.b64encode(screenshot_bytes).decode('utf-8')
@@ -796,10 +836,13 @@ class AIWebsiteTester:
             
         except Exception as e:
             # Capture error screenshot if page exists
-            if self.page:
-                error_screenshot = self._capture_screenshot("error")
-                if error_screenshot:
-                    screenshots.append(error_screenshot)
+            try:
+                if self.page and not self.page.is_closed():
+                    error_screenshot = self._capture_screenshot("error")
+                    if error_screenshot and error_screenshot.get("base64"):
+                        screenshots.append(error_screenshot)
+            except:
+                pass  # Don't fail if screenshot capture fails
             
             state["execution_result"] = {
                 "status": "error",
@@ -811,8 +854,12 @@ class AIWebsiteTester:
             state["error"] = f"Execution error: {str(e)}"
         
         finally:
-            # Cleanup
-            self._cleanup_browser()
+            # Cleanup browser resources (but don't fail if cleanup fails)
+            try:
+                self._cleanup_browser()
+            except Exception as cleanup_error:
+                # Log but don't raise - cleanup errors shouldn't break the flow
+                pass
         
         return state
     
@@ -836,9 +883,9 @@ class AIWebsiteTester:
                 "generated_code": state.get("generated_code", ""),
             }
             
-            # Add performance metrics if available
-            if self.page:
-                try:
+            # Add performance metrics if available (but don't fail if unavailable)
+            try:
+                if self.page and not self.page.is_closed():
                     performance = self.page.evaluate("""
                         () => {
                             const perf = performance.timing;
@@ -850,8 +897,9 @@ class AIWebsiteTester:
                         }
                     """)
                     report["performance"] = performance
-                except:
-                    pass
+            except:
+                # Performance metrics are optional - don't fail if unavailable
+                pass
             
             state["test_report"] = report
             state["error"] = None
