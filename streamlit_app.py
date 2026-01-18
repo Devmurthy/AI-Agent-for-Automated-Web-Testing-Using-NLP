@@ -1068,7 +1068,7 @@ with col_results:
             st.info("""
             **Troubleshooting Steps:**
             
-            1. ✅ **Verify requirements.txt** - `playwright==1.41.0` should be listed
+            1. ✅ **Verify requirements.txt** - `playwright==1.49.0` should be listed
             2. ⏳ **Wait for deployment** - Package installation happens during deployment (may take 2-5 minutes)
             3. 📋 **Check deployment logs** - Go to "Manage app" → "Logs" to see if Playwright installed successfully
             4. 🔄 **Try redeploying** - Click "Reboot app" or redeploy if installation failed
