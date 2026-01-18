@@ -619,7 +619,7 @@ def get_ai_agent():
         
         # If no API key, return None but don't fail - agent can work in fallback mode
         if not api_key or len(api_key) < 10:
-            return None, "OPENAI_API_KEY not found"
+            return None, "OPENAI_API_KEY_NOT_FOUND"
         
         # Try to initialize the agent
         try:
@@ -631,7 +631,7 @@ def get_ai_agent():
                 # Double-check if key is in environment
                 check_key = os.getenv('OPENAI_API_KEY')
                 if not check_key or len(check_key) < 10:
-                    return None, "OPENAI_API_KEY not found"
+                    return None, "OPENAI_API_KEY_NOT_FOUND"
                 else:
                     # Key exists but agent still failed - might be invalid
                     return None, f"API key found but initialization failed: {str(ve)}"
@@ -874,56 +874,65 @@ st.markdown('<div id="demo" class="section demo"><div class="section-container">
 # Initialize agent
 ai_agent, error = get_ai_agent()
 
-# Only show error message if there's actually an error
-if error:
-    # Check if API key exists in environment (might be loaded but agent failed for other reason)
-    api_key_exists = bool(os.getenv('OPENAI_API_KEY'))
+# Only show error message if API key is truly missing
+if error == "OPENAI_API_KEY_NOT_FOUND":
+    # Check if we're running on Streamlit Cloud (has secrets) or locally
+    is_streamlit_cloud = hasattr(st, 'secrets') and hasattr(st.secrets, '__contains__')
     
-    if "OPENAI_API_KEY" in error or "not found" in error.lower():
-        # Check if we're running locally (has .env file) or on Streamlit Cloud
+    if is_streamlit_cloud:
+        # On Streamlit Cloud - need to use Secrets
+        st.info("""
+        💡 **API Key Setup Required for Streamlit Cloud**
+        
+        To use the full AI capabilities, please add your OpenAI API key:
+        
+        1. Click **"Manage app"** button (bottom right)
+        2. Go to **"Secrets"** tab
+        3. Add this line:
+           ```
+           OPENAI_API_KEY = your_api_key_here
+           ```
+        4. Save and the app will automatically reload
+        
+        **Note:** `.env` files don't work on Streamlit Cloud - you must use Secrets.
+        """)
+    else:
+        # Running locally - can use .env file
         env_file_exists = Path('.env').exists() or Path(__file__).parent.joinpath('.env').exists()
         
-        if env_file_exists and not api_key_exists:
+        if env_file_exists:
             st.warning("""
-            ⚠️ **API Key Not Loaded**
+            ⚠️ **API Key Not Loaded from .env File**
             
             A `.env` file was found, but the API key couldn't be loaded. Please check:
             
             1. The `.env` file is in the project root directory
             2. The format is correct: `OPENAI_API_KEY=your_key_here` (no quotes needed)
-            3. Restart the Streamlit app after creating/updating `.env`
+            3. Restart the Streamlit app: `streamlit run streamlit_app.py`
             
             The app will work in limited mode without the API key.
             """)
-        elif not env_file_exists and not api_key_exists:
+        else:
             st.info("""
             💡 **API Key Setup Required**
             
             To use the full AI capabilities, please add your OpenAI API key:
             
-            1. **Locally**: Create a `.env` file in the project root with:
-               ```
-               OPENAI_API_KEY=your_api_key_here
-               ```
-               Then restart the app.
+            Create a `.env` file in the project root with:
+            ```
+            OPENAI_API_KEY=your_api_key_here
+            ```
             
-            2. **Streamlit Cloud**: Go to **Manage app** → **Secrets** → Add:
-               ```
-               OPENAI_API_KEY = your_api_key_here
-               ```
+            Then restart the app: `streamlit run streamlit_app.py`
             
             The app will work in limited mode without the API key.
             """)
-        else:
-            # API key exists but agent failed for another reason
-            st.warning(f"⚠️ AI Agent initialization issue: {error}")
-    else:
-        st.warning(f"⚠️ AI Agent initialization: {error}")
     ai_agent = None
-elif ai_agent:
-    # Success - API key loaded and agent initialized
-    # Don't show message if everything is working - keep UI clean
-    pass
+elif error:
+    # Other error (not just missing API key)
+    st.warning(f"⚠️ AI Agent initialization: {error}")
+    ai_agent = None
+# If no error and ai_agent exists, everything is working - no message needed
 
 # Create two columns for form and results
 col_form, col_results = st.columns(2)
