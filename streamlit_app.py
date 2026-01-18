@@ -619,10 +619,23 @@ def get_ai_agent():
         
         # If no API key, return None but don't fail - agent can work in fallback mode
         if not api_key or len(api_key) < 10:
-            return None, "OPENAI_API_KEY not found. Please add it in Streamlit Cloud secrets or .env file. The app will work in limited mode."
+            return None, "OPENAI_API_KEY not found"
         
-        agent = AIWebsiteTester()
-        return agent, None
+        # Try to initialize the agent
+        try:
+            agent = AIWebsiteTester()
+            return agent, None
+        except ValueError as ve:
+            # This happens when AIWebsiteTester can't find the API key
+            if "OPENAI_API_KEY" in str(ve):
+                # Double-check if key is in environment
+                check_key = os.getenv('OPENAI_API_KEY')
+                if not check_key or len(check_key) < 10:
+                    return None, "OPENAI_API_KEY not found"
+                else:
+                    # Key exists but agent still failed - might be invalid
+                    return None, f"API key found but initialization failed: {str(ve)}"
+            return None, str(ve)
     except ValueError as e:
         # This is the error from ai_agent.py when API key is missing
         if "OPENAI_API_KEY" in str(e):
@@ -861,13 +874,16 @@ st.markdown('<div id="demo" class="section demo"><div class="section-container">
 # Initialize agent
 ai_agent, error = get_ai_agent()
 
+# Only show error message if there's actually an error
 if error:
-    # Show a more user-friendly message
+    # Check if API key exists in environment (might be loaded but agent failed for other reason)
+    api_key_exists = bool(os.getenv('OPENAI_API_KEY'))
+    
     if "OPENAI_API_KEY" in error or "not found" in error.lower():
         # Check if we're running locally (has .env file) or on Streamlit Cloud
         env_file_exists = Path('.env').exists() or Path(__file__).parent.joinpath('.env').exists()
         
-        if env_file_exists:
+        if env_file_exists and not api_key_exists:
             st.warning("""
             ⚠️ **API Key Not Loaded**
             
@@ -879,7 +895,7 @@ if error:
             
             The app will work in limited mode without the API key.
             """)
-        else:
+        elif not env_file_exists and not api_key_exists:
             st.info("""
             💡 **API Key Setup Required**
             
@@ -898,12 +914,16 @@ if error:
             
             The app will work in limited mode without the API key.
             """)
+        else:
+            # API key exists but agent failed for another reason
+            st.warning(f"⚠️ AI Agent initialization issue: {error}")
     else:
         st.warning(f"⚠️ AI Agent initialization: {error}")
     ai_agent = None
-else:
-    # Success - show a subtle indicator
-    st.success("✅ AI Agent ready - API key loaded successfully!", icon="🤖")
+elif ai_agent:
+    # Success - API key loaded and agent initialized
+    # Don't show message if everything is working - keep UI clean
+    pass
 
 # Create two columns for form and results
 col_form, col_results = st.columns(2)
