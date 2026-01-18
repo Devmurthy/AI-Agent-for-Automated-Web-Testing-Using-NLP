@@ -677,8 +677,17 @@ class AIWebsiteTester:
                     if not any(keyword in error_msg.lower() for keyword in ["closed", "destroyed", "navigation"]):
                         raise exec_error
             
-            # Wait a bit for page to settle
+            # Wait a bit for page to settle after execution
             time.sleep(1.5)
+            
+            # Capture screenshot after execution (before final)
+            try:
+                if self.page and not self.page.is_closed():
+                    after_exec_screenshot = self._capture_screenshot("after_execution")
+                    if after_exec_screenshot and after_exec_screenshot.get("base64"):
+                        screenshots.append(after_exec_screenshot)
+            except:
+                pass
             
             # Capture final screenshot - handle case where page might have navigated
             try:
