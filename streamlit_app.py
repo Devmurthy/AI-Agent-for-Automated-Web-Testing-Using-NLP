@@ -1052,7 +1052,7 @@ with col_form:
             label_visibility="collapsed"
         )
         
-        submitted = st.form_submit_button("🚀 Run Test", use_column_width=True, type="primary")
+        submitted = st.form_submit_button("🚀 Run Test", type="primary")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
