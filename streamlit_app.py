@@ -1059,8 +1059,17 @@ with col_form:
 with col_results:
     st.markdown('<div class="demo-results" id="results">', unsafe_allow_html=True)
     
+    # Initialize session state for results if not exists
+    if 'test_result' not in st.session_state:
+        st.session_state.test_result = None
+    if 'test_running' not in st.session_state:
+        st.session_state.test_running = False
+    
     # Run test when form is submitted
     if submitted:
+        # Set running flag
+        st.session_state.test_running = True
+        st.session_state.test_result = None
         if not ai_agent:
             st.error("❌ **AI Agent not available.** Please add your OpenAI API key to use this feature.")
         elif not PLAYWRIGHT_AVAILABLE:
@@ -1117,13 +1126,16 @@ with col_results:
                 progress_bar.progress(100)
                 status_text.text("✅ Test completed!")
                 
+                # Store result in session state to persist across reruns
+                st.session_state.test_result = result
+                st.session_state.test_running = False
+                
                 # Clear progress indicators
                 progress_bar.empty()
                 status_text.empty()
                 
-                # Display results
-                st.markdown("---")
-                st.header("📊 Test Results")
+                # Force rerun to display results from session state
+                st.rerun()
                 
                 # Status
                 if result.get("status") == "success":
