@@ -1235,9 +1235,128 @@ with col_results:
             except Exception as e:
                 progress_bar.empty()
                 status_text.empty()
-                st.error(f"❌ An error occurred: {str(e)}")
-                st.exception(e)
-    else:
+                st.session_state.test_running = False
+                st.session_state.test_result = {
+                    "status": "error",
+                    "error": str(e),
+                    "websiteUrl": website_url,
+                    "testInstruction": test_instruction,
+                    "browser": browser
+                }
+                st.rerun()
+    
+    # Display results from session state (persists across reruns)
+    if st.session_state.test_result is not None:
+        result = st.session_state.test_result
+        
+        # Display results
+        st.markdown("---")
+        st.header("📊 Test Results")
+        
+        # Status
+        if result.get("status") == "success":
+            st.success(f"✅ Test Passed")
+        elif result.get("status") == "error":
+            st.error(f"❌ Test Failed")
+        else:
+            st.info(f"ℹ️ Test Status: {result.get('status', 'unknown')}")
+        
+        # Test details
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Website", result.get("websiteUrl", "N/A"))
+        with col2:
+            st.metric("Browser", result.get("browser", "N/A"))
+        
+        st.markdown(f"**Test Instruction:** {result.get('testInstruction', 'N/A')}")
+        
+        # Results
+        if result.get("results"):
+            st.subheader("📋 Results")
+            for res in result["results"]:
+                st.markdown(f"- {res}")
+        
+        # Validations
+        if result.get("validations"):
+            st.subheader("✅ Validations")
+            for val in result["validations"]:
+                status_icon = "✅" if val.get("status") == "pass" else "⚠️" if val.get("status") == "warning" else "❌"
+                st.markdown(f"{status_icon} **{val.get('type', 'N/A')}**: {val.get('message', 'N/A')}")
+        
+        # Screenshots
+        if result.get("screenshots"):
+            st.subheader("📸 Screenshots")
+            screenshots = result["screenshots"]
+            # Filter duplicates and empty screenshots
+            seen = set()
+            unique_screenshots = []
+            for ss in screenshots:
+                if (ss and 
+                    isinstance(ss, dict) and 
+                    ss.get("name") and 
+                    ss.get("name") not in seen and 
+                    ss.get("base64") and 
+                    len(ss.get("base64", "")) > 100):  # Ensure base64 data exists and is substantial
+                    seen.add(ss.get("name"))
+                    unique_screenshots.append(ss)
+            
+            if unique_screenshots:
+                # Display screenshots in a responsive grid (max 2 per row for better visibility)
+                num_cols = min(len(unique_screenshots), 2)
+                cols = st.columns(num_cols)
+                for idx, screenshot in enumerate(unique_screenshots):
+                    with cols[idx % num_cols]:
+                        try:
+                            # Clean up screenshot name for display
+                            display_name = screenshot.get("name", f"Screenshot {idx + 1}")
+                            # Remove timestamp and extension for cleaner display
+                            if "_" in display_name:
+                                display_name = display_name.split("_")[0].replace("_", " ").title()
+                            
+                            st.image(
+                                f"data:image/png;base64,{screenshot.get('base64')}",
+                                caption=display_name,
+                                use_column_width=True,
+                                clamp=True  # Ensure image fits within column
+                            )
+                        except Exception as img_error:
+                            st.error(f"Error displaying screenshot {idx + 1}: {str(img_error)[:100]}")
+            else:
+                st.info("No screenshots available. Screenshots may still be processing or the page may have closed.")
+        
+        # Performance metrics
+        if result.get("performance"):
+            st.subheader("⚡ Performance Metrics")
+            perf = result["performance"]
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Load Time", f"{perf.get('loadTime', 0)}ms")
+            with col2:
+                page_size = perf.get('pageSize', 0)
+                if page_size:
+                    st.metric("Page Size", f"{page_size / 1024:.2f}KB")
+                else:
+                    st.metric("Page Size", "N/A")
+        
+        # Error details
+        if result.get("error"):
+            st.error(f"❌ Error: {result.get('error')}")
+        
+        # Execution details
+        if result.get("execution_details"):
+            exec_details = result["execution_details"]
+            if exec_details.get("error"):
+                st.error(f"❌ Execution Error: {exec_details.get('error')}")
+        
+        # Add button to clear results and run new test
+        st.markdown("---")
+        if st.button("🔄 Run New Test", use_column_width=True):
+            st.session_state.test_result = None
+            st.session_state.test_running = False
+            st.rerun()
+    
+    elif not st.session_state.test_running:
+        # Show placeholder when no results
         st.markdown('''
         <div class="results-placeholder">
             <i class="fas fa-clipboard-list"></i>
