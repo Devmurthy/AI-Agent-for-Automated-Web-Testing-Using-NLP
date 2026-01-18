@@ -52,10 +52,21 @@ def inject_custom_css():
     
     .main {
         padding: 0 !important;
+        max-width: 100% !important;
     }
     
     .stApp {
         font-family: 'Poppins', sans-serif;
+        max-width: 100% !important;
+    }
+    
+    .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    
+    [data-testid="stAppViewContainer"] {
+        padding: 0 !important;
     }
     
     /* Hide Streamlit default elements */
@@ -279,6 +290,7 @@ def inject_custom_css():
     .section-container {
         max-width: 1200px;
         margin: 0 auto;
+        padding: 0 20px;
     }
     
     .section-title {
@@ -432,6 +444,13 @@ def inject_custom_css():
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 2rem;
+        align-items: start;
+    }
+    
+    @media (max-width: 768px) {
+        .demo-container {
+            grid-template-columns: 1fr;
+        }
     }
     
     .demo-form {
@@ -534,6 +553,23 @@ def inject_custom_css():
 def get_ai_agent():
     """Initialize and cache the AI agent"""
     try:
+        # Try to get API key from Streamlit secrets first, then environment
+        api_key = None
+        try:
+            if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+                api_key = st.secrets['OPENAI_API_KEY']
+                os.environ['OPENAI_API_KEY'] = api_key
+        except:
+            pass
+        
+        # If still not found, try environment variable
+        if not api_key:
+            api_key = os.getenv('OPENAI_API_KEY')
+        
+        # If no API key, return None but don't fail - agent can work in fallback mode
+        if not api_key:
+            return None, "OPENAI_API_KEY not found. Please add it in Streamlit Cloud secrets or .env file. The app will work in limited mode."
+        
         agent = AIWebsiteTester()
         return agent, None
     except Exception as e:
@@ -763,8 +799,27 @@ st.markdown('<div class="section demo"><div class="section-container"><h2 class=
 ai_agent, error = get_ai_agent()
 
 if error:
-    st.warning(f"⚠️ AI Agent initialization: {error}")
-    st.info("💡 The agent will work in fallback mode without OpenAI API")
+    # Show a more user-friendly message
+    if "OPENAI_API_KEY" in error:
+        st.info("""
+        💡 **API Key Setup Required**
+        
+        To use the full AI capabilities, please add your OpenAI API key:
+        
+        1. In Streamlit Cloud: Go to **Manage app** → **Secrets** → Add:
+           ```
+           OPENAI_API_KEY = your_api_key_here
+           ```
+        
+        2. Or locally: Create a `.env` file with:
+           ```
+           OPENAI_API_KEY=your_api_key_here
+           ```
+        
+        The app will work in limited mode without the API key.
+        """)
+    else:
+        st.warning(f"⚠️ AI Agent initialization: {error}")
     ai_agent = None
 
 # Create two columns for form and results
