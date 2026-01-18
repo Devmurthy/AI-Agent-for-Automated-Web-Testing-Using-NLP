@@ -1052,7 +1052,7 @@ with col_form:
             label_visibility="collapsed"
         )
         
-        submitted = st.form_submit_button("🚀 Run Test", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("🚀 Run Test", use_column_width=True, type="primary")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1083,7 +1083,20 @@ with col_results:
         elif not website_url or not test_instruction:
             st.warning("⚠️ Please fill in both Website URL and Test Instruction")
         else:
-            # Validate URL
+            # Normalize and validate URL
+            website_url = website_url.strip()
+            # Remove duplicate protocols (e.g., "https://HTTPS://AMAZON.COM" -> "https://amazon.com")
+            website_url = website_url.lower()
+            if 'https://https://' in website_url:
+                website_url = website_url.replace('https://https://', 'https://')
+            elif 'http://http://' in website_url:
+                website_url = website_url.replace('http://http://', 'http://')
+            elif 'https://http://' in website_url:
+                website_url = website_url.replace('https://http://', 'https://')
+            elif 'http://https://' in website_url:
+                website_url = website_url.replace('http://https://', 'https://')
+            
+            # Add protocol if missing
             if not website_url.startswith(('http://', 'https://')):
                 website_url = 'https://' + website_url
             
@@ -1161,7 +1174,7 @@ with col_results:
                                 st.image(
                                     f"data:image/png;base64,{screenshot.get('base64')}",
                                     caption=screenshot.get("name", f"Screenshot {idx + 1}"),
-                                    use_container_width=True
+                                    use_column_width=True
                                 )
                 
                 # Performance metrics
