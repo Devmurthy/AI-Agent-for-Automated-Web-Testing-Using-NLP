@@ -1159,23 +1159,42 @@ with col_results:
                 if result.get("screenshots"):
                     st.subheader("📸 Screenshots")
                     screenshots = result["screenshots"]
-                    # Filter duplicates
+                    # Filter duplicates and empty screenshots
                     seen = set()
                     unique_screenshots = []
                     for ss in screenshots:
-                        if ss.get("name") and ss.get("name") not in seen and ss.get("base64"):
+                        if (ss and 
+                            isinstance(ss, dict) and 
+                            ss.get("name") and 
+                            ss.get("name") not in seen and 
+                            ss.get("base64") and 
+                            len(ss.get("base64", "")) > 100):  # Ensure base64 data exists and is substantial
                             seen.add(ss.get("name"))
                             unique_screenshots.append(ss)
                     
                     if unique_screenshots:
-                        cols = st.columns(min(len(unique_screenshots), 3))
+                        # Display screenshots in a responsive grid (max 2 per row for better visibility)
+                        num_cols = min(len(unique_screenshots), 2)
+                        cols = st.columns(num_cols)
                         for idx, screenshot in enumerate(unique_screenshots):
-                            with cols[idx % len(cols)]:
-                                st.image(
-                                    f"data:image/png;base64,{screenshot.get('base64')}",
-                                    caption=screenshot.get("name", f"Screenshot {idx + 1}"),
-                                    use_column_width=True
-                                )
+                            with cols[idx % num_cols]:
+                                try:
+                                    # Clean up screenshot name for display
+                                    display_name = screenshot.get("name", f"Screenshot {idx + 1}")
+                                    # Remove timestamp and extension for cleaner display
+                                    if "_" in display_name:
+                                        display_name = display_name.split("_")[0].replace("_", " ").title()
+                                    
+                                    st.image(
+                                        f"data:image/png;base64,{screenshot.get('base64')}",
+                                        caption=display_name,
+                                        use_column_width=True,
+                                        clamp=True  # Ensure image fits within column
+                                    )
+                                except Exception as img_error:
+                                    st.error(f"Error displaying screenshot {idx + 1}: {str(img_error)[:100]}")
+                    else:
+                        st.info("No screenshots available. Screenshots may still be processing or the page may have closed.")
                 
                 # Performance metrics
                 if result.get("performance"):

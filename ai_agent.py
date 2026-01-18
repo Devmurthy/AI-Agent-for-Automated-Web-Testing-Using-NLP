@@ -413,13 +413,31 @@ class AIWebsiteTester:
             if not self.page:
                 return None
             
+            # Wait a moment for page to settle
+            time.sleep(0.5)
+            
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             screenshot_path = self.screenshots_dir / f"{name}_{timestamp}.png"
-            self.page.screenshot(path=str(screenshot_path), full_page=True)
             
-            # Read and encode as base64
-            with open(screenshot_path, "rb") as f:
-                screenshot_data = base64.b64encode(f.read()).decode('utf-8')
+            # Capture screenshot with viewport size (not full page to avoid huge images)
+            # Use a reasonable max height to keep images manageable
+            screenshot_bytes = self.page.screenshot(
+                path=str(screenshot_path),
+                full_page=False,  # Use viewport instead of full page for better performance
+                type='png'
+            )
+            
+            # If screenshot_bytes is None, read from file
+            if screenshot_bytes is None:
+                with open(screenshot_path, "rb") as f:
+                    screenshot_bytes = f.read()
+            
+            # Encode as base64
+            screenshot_data = base64.b64encode(screenshot_bytes).decode('utf-8')
+            
+            # Verify screenshot is not empty
+            if len(screenshot_data) < 100:  # Very small base64 = likely empty
+                return None
             
             return {
                 "path": str(screenshot_path),
@@ -428,7 +446,8 @@ class AIWebsiteTester:
                 "timestamp": timestamp
             }
         except Exception as e:
-            return {"error": str(e)}
+            # Return None instead of error dict to avoid issues
+            return None
     
     def _validate_page(self, instruction: str) -> list:
         """Validate page elements based on instruction"""
@@ -658,22 +677,32 @@ class AIWebsiteTester:
                     if not any(keyword in error_msg.lower() for keyword in ["closed", "destroyed", "navigation"]):
                         raise exec_error
             
-            # Wait a bit for page to settle (reduced from 2 to 1 second)
-            time.sleep(1)
+            # Wait a bit for page to settle
+            time.sleep(1.5)
             
             # Capture final screenshot - handle case where page might have navigated
             try:
-                final_screenshot = self._capture_screenshot("final")
-                if final_screenshot:
-                    screenshots.append(final_screenshot)
+                # Ensure page is still valid
+                if self.page and not self.page.is_closed():
+                    final_screenshot = self._capture_screenshot("final")
+                    if final_screenshot and final_screenshot.get("base64"):
+                        screenshots.append(final_screenshot)
+                elif self.context and self.context.pages:
+                    # Try to get the current page
+                    self.page = self.context.pages[-1]
+                    if self.page and not self.page.is_closed():
+                        final_screenshot = self._capture_screenshot("final")
+                        if final_screenshot and final_screenshot.get("base64"):
+                            screenshots.append(final_screenshot)
             except Exception as screenshot_error:
-                # If screenshot fails due to closed page, try to get new page
+                # If screenshot fails, try one more time with new page reference
                 try:
                     if self.context and self.context.pages:
                         self.page = self.context.pages[-1]
-                        final_screenshot = self._capture_screenshot("final")
-                        if final_screenshot:
-                            screenshots.append(final_screenshot)
+                        if self.page and not self.page.is_closed():
+                            final_screenshot = self._capture_screenshot("final")
+                            if final_screenshot and final_screenshot.get("base64"):
+                                screenshots.append(final_screenshot)
                 except:
                     pass  # Continue even if screenshot fails
             
